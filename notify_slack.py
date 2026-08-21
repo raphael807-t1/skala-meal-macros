@@ -20,17 +20,17 @@ def _weekday_kr(date: str) -> str:
     return ["월", "화", "수", "목", "금", "토", "일"][dt.weekday()]
 
 
-def _meal_line(meal: dict, excluded: set[str]) -> str:
+def _meal_line(meal: dict, excluded: dict[str, str]) -> str:
     names = []
     for d in meal["dishes"]:
         name = d["name"]
         if name in excluded:
-            name += "(중복제외)"
+            name += f"({excluded[name]}에 포함)"
         names.append(name)
     return " · ".join(names)
 
 
-def _meal_totals(dishes: list[str], macros: dict[str, dict], excluded: set[str]) -> dict:
+def _meal_totals(dishes: list[str], macros: dict[str, dict], excluded: dict[str, str]) -> dict:
     total = {"carb_g": 0, "protein_g": 0, "fat_g": 0, "kcal": 0}
     for d in dishes:
         if d in excluded:
@@ -49,7 +49,7 @@ def _meal_totals(dishes: list[str], macros: dict[str, dict], excluded: set[str])
     return total
 
 
-def build_message(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: dict[str, set[str]] | None = None) -> str:
+def build_message(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: dict[str, dict[str, str]] | None = None) -> str:
     excluded_by_meal = excluded_by_meal or {}
     dt = datetime.date.fromisoformat(date)
     header = f":knife_fork_plate: 오늘의 메뉴 · {dt.strftime('%m/%d')} ({_weekday_kr(date)})"
@@ -60,7 +60,7 @@ def build_message(date: str, day: dict, macros: dict[str, dict], excluded_by_mea
         if not meal:
             continue
         dishes = [d["name"] for d in meal["dishes"]]
-        excluded = excluded_by_meal.get(meal_key, set())
+        excluded = excluded_by_meal.get(meal_key, {})
         icon = MEAL_ICON[meal_key]
         label = MEAL_LABEL[meal_key]
         meal_totals = _meal_totals(dishes, macros, excluded)

@@ -42,28 +42,30 @@ def _push_page_to_github(date: str) -> None:
         print(f"[git push 실패, 계속 진행] {e}")
 
 
-def _find_meal_duplicates(day: dict) -> dict[str, set[str]]:
+def _find_meal_duplicates(day: dict) -> dict[str, dict[str, str]]:
     """끼니(중식/석식)별로 딱 1번씩 GPT를 불러서 이중계산 위험 메뉴를 찾는다.
-    반환값: {"lunch": {"쌀밥"}, "dinner": {...}} 처럼 끼니별로 분리된 집합.
+    반환값: {"lunch": {}, "dinner": {"쌀밥": "장터국밥"}} 형태 -- 제외된 메뉴명 ->
+    "그 메뉴에 이미 포함됐다고 판단한 다른 메뉴명". 화면에 "왜 빠졌는지"를
+    바로 보여주기 위해 이유(contained_in)까지 같이 들고 다닌다.
 
     주의: 같은 메뉴명(예: "쌀밥")이 점심/저녁에 둘 다 나올 수 있는데, macros는
     메뉴명을 키로 쓰는 딕셔너리라 점심 쌀밥과 저녁 쌀밥이 "같은 객체"를
     공유한다. 그래서 예전엔 저녁에서만 제외 판단이 나도 macros[dish]에 직접
     플래그를 박아버려서 점심 쌀밥까지 같이 제외되는 버그가 있었다.
-    그래서 절대 macros를 직접 수정하지 않고, 끼니별로 분리된 set을 따로
+    그래서 절대 macros를 직접 수정하지 않고, 끼니별로 분리된 dict를 따로
     반환해서 generate_page.py/notify_slack.py가 "지금 보고 있는 끼니 안에서만"
     이 메뉴가 제외 대상인지 판단하게 한다."""
-    excluded_by_meal: dict[str, set[str]] = {}
+    excluded_by_meal: dict[str, dict[str, str]] = {}
     for meal_key in ("lunch", "dinner"):
         meal = day.get(meal_key)
         if not meal:
             continue
         names = [d["name"] for d in meal["dishes"]]
         result = estimate_gpt.check_meal_duplicates(names)
-        excluded = set()
+        excluded: dict[str, str] = {}
         for item in result["exclude"]:
             dish = item["dish"]
-            excluded.add(dish)
+            excluded[dish] = item["contained_in"]
             print(f"  [중복검사:{meal_key}] '{dish}' 총합에서 제외 (근거: {item['contained_in']}) - {item.get('reason', '')}")
         excluded_by_meal[meal_key] = excluded
     return excluded_by_meal

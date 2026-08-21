@@ -7,7 +7,7 @@ from pathlib import Path
 
 OUT_PATH = Path(__file__).parent / "docs" / "index.html"
 
-MEAL_LABEL = {"lunch": "중식", "dinner": "석식"}
+MEAL_LABEL = {"lunch": "🥗 중식", "dinner": "🍲 석식"}
 
 
 def _per_100g(m: dict) -> dict:
@@ -24,7 +24,7 @@ def _per_100g(m: dict) -> dict:
     }
 
 
-def _meal_totals(dishes: list[str], macros: dict[str, dict], excluded: set[str]) -> dict:
+def _meal_totals(dishes: list[str], macros: dict[str, dict], excluded: dict[str, str]) -> dict:
     total = {"carb_g": 0, "protein_g": 0, "fat_g": 0, "kcal": 0}
     for d in dishes:
         if d in excluded:
@@ -44,44 +44,56 @@ def _meal_totals(dishes: list[str], macros: dict[str, dict], excluded: set[str])
 
 
 RELIABILITY_BADGE = {
-    "high": "DB",
-    "medium": "DB유사",
-    "low": "GPT추정",
-    "none": "실패",
+    "high": "🟢 DB",
+    "medium": "🟡 DB유사",
+    "low": "🟠 GPT추정",
+    "none": "🔴 실패",
 }
 
 
 def _source_badge(m: dict) -> str:
     # 이상치 의심이면 그게 제일 중요한 정보라 출처 대신 그것부터 보여준다.
     if m.get("outlier"):
-        return "이상치의심"
+        return "⚠️ 이상치의심"
     return RELIABILITY_BADGE.get(m.get("reliability"), "-")
 
 
-def _meal_rows(dishes: list[str], macros: dict[str, dict], excluded: set[str]) -> str:
+def _meal_rows(dishes: list[str], macros: dict[str, dict], excluded: dict[str, str]) -> str:
     rows = []
     for d in dishes:
         m = macros.get(d, {})
         p100 = _per_100g(m)
-        badge = _source_badge(m)
-        is_excluded = d in excluded
-        if is_excluded:
-            badge += " (중복제외)"
-        row_style = ' style="opacity:0.55"' if is_excluded else ""
-        rows.append(
-            f"<tr{row_style}>"
-            f"<td>{d}</td>"
-            f"<td>{m.get('serving_g', 0)}g</td>"
-            f"<td>{p100['kcal']}kcal</td>"
-            f"<td>{m.get('carb_g', 0)}g / {m.get('protein_g', 0)}g / {m.get('fat_g', 0)}g</td>"
-            f"<td>{m.get('kcal', 0)}kcal</td>"
-            f"<td>{badge}</td>"
-            "</tr>"
-        )
+        contained_in = excluded.get(d)
+        if contained_in:
+            # 그냥 흐리게만 하면 "왜 빠졌는지" 안 보여서, 값 칸에 취소선을 긋고
+            # 그 옆에 이유를 텍스트로 바로 보여준다 (예: "장터국밥에 포함").
+            row = (
+                '<tr class="excluded">'
+                f"<td>{d}</td>"
+                f"<td>{m.get('serving_g', 0)}g</td>"
+                f"<td>{p100['kcal']}kcal</td>"
+                f'<td><s>{m.get("carb_g", 0)}g / {m.get("protein_g", 0)}g / {m.get("fat_g", 0)}g</s></td>'
+                f'<td><s>{m.get("kcal", 0)}kcal</s></td>'
+                f'<td>🔁 {contained_in}에 포함</td>'
+                "</tr>"
+            )
+        else:
+            badge = _source_badge(m)
+            row = (
+                "<tr>"
+                f"<td>{d}</td>"
+                f"<td>{m.get('serving_g', 0)}g</td>"
+                f"<td>{p100['kcal']}kcal</td>"
+                f"<td>{m.get('carb_g', 0)}g / {m.get('protein_g', 0)}g / {m.get('fat_g', 0)}g</td>"
+                f"<td>{m.get('kcal', 0)}kcal</td>"
+                f"<td>{badge}</td>"
+                "</tr>"
+            )
+        rows.append(row)
     return "\n".join(rows)
 
 
-def build_html(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: dict[str, set[str]] | None = None) -> str:
+def build_html(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: dict[str, dict[str, str]] | None = None) -> str:
     excluded_by_meal = excluded_by_meal or {}
     sections = []
     for meal_key, label in MEAL_LABEL.items():
@@ -89,7 +101,7 @@ def build_html(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: 
         if not meal:
             continue
         dishes = [d["name"] for d in meal["dishes"]]
-        excluded = excluded_by_meal.get(meal_key, set())
+        excluded = excluded_by_meal.get(meal_key, {})
         totals = _meal_totals(dishes, macros, excluded)
         sections.append(f"""
         <section>
@@ -130,12 +142,14 @@ def build_html(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: 
   table {{ width: 100%; min-width: 560px; table-layout: fixed; border-collapse: collapse; font-size: 0.85rem; }}
   th, td {{ text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
   tr.total {{ font-weight: bold; border-top: 2px solid #333; }}
+  tr.excluded {{ color: #999; }}
+  tr.excluded s {{ opacity: 0.7; }}
   .note {{ color: #888; font-size: 0.8rem; margin-top: 2rem; }}
   .scroll {{ overflow-x: auto; }}
 </style>
 </head>
 <body>
-  <h1>SKALA 오늘의 영양정보 ({date})</h1>
+  <h1>🍽️ SKALA 오늘의 영양정보 ({date})</h1>
   <div class="scroll">
   {"".join(sections) if sections else "<p>오늘은 메뉴 정보가 없습니다.</p>"}
   </div>
@@ -144,7 +158,7 @@ def build_html(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: 
 </html>"""
 
 
-def generate(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: dict[str, set[str]] | None = None) -> Path:
+def generate(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: dict[str, dict[str, str]] | None = None) -> Path:
     OUT_PATH.parent.mkdir(exist_ok=True)
     OUT_PATH.write_text(build_html(date, day, macros, excluded_by_meal), encoding="utf-8")
     return OUT_PATH
