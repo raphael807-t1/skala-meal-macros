@@ -10,6 +10,7 @@
   h2 { font-size: 1.1rem; margin-top: 2rem; }
   table { width: 100%; min-width: 560px; table-layout: fixed; border-collapse: collapse; font-size: 0.85rem; }
   th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  td.src { white-space: normal; overflow: visible; text-overflow: clip; }
   tr.total { font-weight: bold; border-top: 2px solid #333; }
   tr.excluded { color: #999; }
   tr.excluded s { opacity: 0.7; }
@@ -25,8 +26,8 @@
           <h2>🥗 중식</h2>
           <table>
             <colgroup>
-              <col style="width:26%"><col style="width:12%"><col style="width:14%">
-              <col style="width:26%"><col style="width:12%"><col style="width:10%">
+              <col style="width:20%"><col style="width:10%"><col style="width:12%">
+              <col style="width:21%"><col style="width:9%"><col style="width:28%">
             </colgroup>
             <thead>
               <tr>
@@ -35,13 +36,13 @@
               </tr>
             </thead>
             <tbody>
-              <tr><td>콩나물불고기</td><td>150g</td><td>156kcal</td><td>40.5g / 6.9g / 4.9g</td><td>234kcal</td><td>🟢 DB</td></tr>
-<tr><td>감자고로케*케찹</td><td>180g</td><td>117kcal</td><td>43.2g / 5.4g / 1.8g</td><td>211kcal</td><td>🟢 DB</td></tr>
-<tr><td>쌀밥</td><td>200g</td><td>166kcal</td><td>74.6g / 6.8g / 0.6g</td><td>332kcal</td><td>🟢 DB</td></tr>
-<tr><td>시래기된장국</td><td>300g</td><td>22kcal</td><td>9.3g / 4.5g / 1.5g</td><td>66kcal</td><td>🟢 DB</td></tr>
-<tr><td>상추쌈*쌈장 / 명태미나리무침</td><td>50g</td><td>142kcal</td><td>10.1g / 3.2g / 2.2g</td><td>71kcal</td><td>🟡 DB유사</td></tr>
-<tr><td>열무김치</td><td>50g</td><td>36kcal</td><td>3.0g / 1.2g / 0.2g</td><td>18kcal</td><td>🟢 DB</td></tr>
-<tr><td>샐러드*드레싱*토핑</td><td>20g</td><td>125kcal</td><td>2.4g / 0.3g / 1.6g</td><td>25kcal</td><td>🟢 DB</td></tr>
+              <tr><td>콩나물불고기</td><td>150g</td><td>156kcal</td><td>40.5g / 6.9g / 4.9g</td><td>234kcal</td><td class="src">🟢 DB</td></tr>
+<tr><td>감자고로케*케찹</td><td>180g</td><td>117kcal</td><td>43.2g / 5.4g / 1.8g</td><td>211kcal</td><td class="src">🟢 DB</td></tr>
+<tr><td>쌀밥</td><td>200g</td><td>166kcal</td><td>74.6g / 6.8g / 0.6g</td><td>332kcal</td><td class="src">🟢 DB</td></tr>
+<tr><td>시래기된장국</td><td>300g</td><td>22kcal</td><td>9.3g / 4.5g / 1.5g</td><td>66kcal</td><td class="src">🟢 DB</td></tr>
+<tr><td>상추쌈*쌈장 / 명태미나리무침</td><td>50g</td><td>142kcal</td><td>10.1g / 3.2g / 2.2g</td><td>71kcal</td><td class="src">🟡 DB유사</td></tr>
+<tr><td>열무김치</td><td>50g</td><td>36kcal</td><td>3.0g / 1.2g / 0.2g</td><td>18kcal</td><td class="src">🟢 DB</td></tr>
+<tr><td>샐러드*드레싱*토핑</td><td>20g</td><td>125kcal</td><td>2.4g / 0.3g / 1.6g</td><td>25kcal</td><td class="src">🟢 DB</td></tr>
               <tr class="total">
                 <td colspan="3">합계</td>
                 <td>183.1g / 28.3g / 12.8g</td>
@@ -55,8 +56,8 @@
           <h2>🍲 석식</h2>
           <table>
             <colgroup>
-              <col style="width:26%"><col style="width:12%"><col style="width:14%">
-              <col style="width:26%"><col style="width:12%"><col style="width:10%">
+              <col style="width:20%"><col style="width:10%"><col style="width:12%">
+              <col style="width:21%"><col style="width:9%"><col style="width:28%">
             </colgroup>
             <thead>
               <tr>
@@ -65,12 +66,12 @@
               </tr>
             </thead>
             <tbody>
-              <tr><td>장터국밥</td><td>450g</td><td>118kcal</td><td>32.9g / 42.3g / 26.1g</td><td>531kcal</td><td>🟢 DB</td></tr>
-<tr><td>매콤두부조림</td><td>200g</td><td>122kcal</td><td>13.8g / 15.1g / 14.4g</td><td>245kcal</td><td>🟡 DB유사</td></tr>
-<tr class="excluded"><td>쌀밥</td><td>200g</td><td>166kcal</td><td><s>74.6g / 6.8g / 0.6g</s></td><td><s>332kcal</s></td><td>🔁 장터국밥에 포함</td></tr>
-<tr><td>갈비만두찜</td><td>180g</td><td>225kcal</td><td>52.2g / 16.2g / 14.4g</td><td>405kcal</td><td>🟡 DB유사</td></tr>
-<tr><td>부추겉절이</td><td>100g</td><td>72kcal</td><td>7.0g / 2.0g / 4.0g</td><td>72kcal</td><td>🟠 GPT추정</td></tr>
-<tr><td>포기김치</td><td>50g</td><td>40kcal</td><td>3.0g / 1.0g / 0.3g</td><td>20kcal</td><td>🟢 DB</td></tr>
+              <tr><td>장터국밥</td><td>450g</td><td>118kcal</td><td>32.9g / 42.3g / 26.1g</td><td>531kcal</td><td class="src">🟢 DB</td></tr>
+<tr><td>매콤두부조림</td><td>200g</td><td>122kcal</td><td>13.8g / 15.1g / 14.4g</td><td>245kcal</td><td class="src">🟡 DB유사</td></tr>
+<tr class="excluded"><td>쌀밥</td><td>200g</td><td>166kcal</td><td><s>74.6g / 6.8g / 0.6g</s></td><td><s>332kcal</s></td><td class="src">🔁 장터국밥에 포함</td></tr>
+<tr><td>갈비만두찜</td><td>180g</td><td>225kcal</td><td>52.2g / 16.2g / 14.4g</td><td>405kcal</td><td class="src">🟡 DB유사</td></tr>
+<tr><td>부추겉절이</td><td>100g</td><td>72kcal</td><td>7.0g / 2.0g / 4.0g</td><td>72kcal</td><td class="src">🟠 GPT추정</td></tr>
+<tr><td>포기김치</td><td>50g</td><td>40kcal</td><td>3.0g / 1.0g / 0.3g</td><td>20kcal</td><td class="src">🟢 DB</td></tr>
               <tr class="total">
                 <td colspan="3">합계</td>
                 <td>108.9g / 76.6g / 59.2g</td>

@@ -74,7 +74,7 @@ def _meal_rows(dishes: list[str], macros: dict[str, dict], excluded: dict[str, s
                 f"<td>{p100['kcal']}kcal</td>"
                 f'<td><s>{m.get("carb_g", 0)}g / {m.get("protein_g", 0)}g / {m.get("fat_g", 0)}g</s></td>'
                 f'<td><s>{m.get("kcal", 0)}kcal</s></td>'
-                f'<td>🔁 {contained_in}에 포함</td>'
+                f'<td class="src">🔁 {contained_in}에 포함</td>'
                 "</tr>"
             )
         else:
@@ -86,7 +86,7 @@ def _meal_rows(dishes: list[str], macros: dict[str, dict], excluded: dict[str, s
                 f"<td>{p100['kcal']}kcal</td>"
                 f"<td>{m.get('carb_g', 0)}g / {m.get('protein_g', 0)}g / {m.get('fat_g', 0)}g</td>"
                 f"<td>{m.get('kcal', 0)}kcal</td>"
-                f"<td>{badge}</td>"
+                f'<td class="src">{badge}</td>'
                 "</tr>"
             )
         rows.append(row)
@@ -108,8 +108,8 @@ def build_html(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: 
           <h2>{label}</h2>
           <table>
             <colgroup>
-              <col style="width:26%"><col style="width:12%"><col style="width:14%">
-              <col style="width:26%"><col style="width:12%"><col style="width:10%">
+              <col style="width:20%"><col style="width:10%"><col style="width:12%">
+              <col style="width:21%"><col style="width:9%"><col style="width:28%">
             </colgroup>
             <thead>
               <tr>
@@ -141,6 +141,7 @@ def build_html(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: 
   h2 {{ font-size: 1.1rem; margin-top: 2rem; }}
   table {{ width: 100%; min-width: 560px; table-layout: fixed; border-collapse: collapse; font-size: 0.85rem; }}
   th, td {{ text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+  td.src {{ white-space: normal; overflow: visible; text-overflow: clip; }}
   tr.total {{ font-weight: bold; border-top: 2px solid #333; }}
   tr.excluded {{ color: #999; }}
   tr.excluded s {{ opacity: 0.7; }}
