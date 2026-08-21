@@ -4,6 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import estimate_gpt
 from estimate_macros import estimate_dishes
 from fetch_menu import dish_names, fetch_today_menu
 from generate_page import generate
@@ -41,6 +42,24 @@ def _push_page_to_github(date: str) -> None:
         print(f"[git push 실패, 계속 진행] {e}")
 
 
+def _flag_meal_duplicates(day: dict, macros: dict[str, dict]) -> None:
+    """끼니(중식/석식)별로 딱 1번씩 GPT를 불러서 이중계산 위험 메뉴를 찾고,
+    해당 메뉴에 excluded_duplicate 플래그를 붙인다 (macros를 제자리에서 수정).
+    화면/Slack에는 그대로 보여주되, 총합 계산에서만 빠지게 하기 위한 표시."""
+    for meal_key in ("lunch", "dinner"):
+        meal = day.get(meal_key)
+        if not meal:
+            continue
+        names = [d["name"] for d in meal["dishes"]]
+        result = estimate_gpt.check_meal_duplicates(names)
+        for item in result["exclude"]:
+            dish = item["dish"]
+            if dish in macros:
+                macros[dish]["excluded_duplicate"] = True
+                macros[dish]["exclude_reason"] = f"{item['contained_in']}에 포함: {item.get('reason', '')}"
+                print(f"  [중복검사] '{dish}' 총합에서 제외 (근거: {item['contained_in']}) - {item.get('reason', '')}")
+
+
 def main() -> None:
     _load_dotenv()
     day = fetch_today_menu()
@@ -58,6 +77,8 @@ def main() -> None:
 
     print(f"[{day['date']}] 메뉴 {len(dishes)}개 영양정보 추정 중...")
     macros = estimate_dishes(dishes)
+
+    _flag_meal_duplicates(day, macros)
 
     page_path = generate(day["date"], day, macros)
     print(f"페이지 생성 완료: {page_path}")

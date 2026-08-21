@@ -9,6 +9,12 @@
      실패했을 때만 호출되는 예전 방식(메뉴명 -> 탄단지kcal 직접 추정).
      여기서 나온 kcal도 estimate_macros.py가 탄단지 기준으로 다시
      검산하므로, GPT가 부른 kcal 자체는 참고용일 뿐 최종값이 아니다.
+
+  3. check_meal_duplicates() — 요리 하나가 아니라 "한 끼 전체 메뉴 리스트"를
+     한 번에 넣고 부르는 마지막 검증 단계. 예: "장터국밥 + 쌀밥"이 같이 나오면,
+     장터국밥 DB 데이터에 이미 밥이 포함돼있을 수 있어서 쌀밥을 또 더하면
+     이중계산이 된다. 요리 개수만큼이 아니라 끼니당 딱 1번만 부르므로 비용이
+     거의 안 든다(하루 최대 2번, 중식/석식 각 1번).
 """
 import json
 import os
@@ -44,6 +50,38 @@ STRUCTURE_PROMPT = """당신은 급식 메뉴의 영양성분을 분석하고, �
 DIRECT_PROMPT = """너는 영양사야. 한국 구내식당 메뉴 "{dish}" 1인분(1회 제공량) 기준 영양정보를 추정해줘.
 반드시 아래 JSON 형식으로만 답해. 설명, 마크다운, 다른 텍스트는 절대 쓰지 마.
 {{"serving_g": 1인분 중량(그램), "carb_g": 숫자, "protein_g": 숫자, "fat_g": 숫자, "kcal": 숫자}}"""
+
+DUPLICATE_CHECK_PROMPT = """너는 급식 영양성분 계산을 검증하는 모델이다.
+아래는 한 끼(중식 또는 석식)에 나온 메뉴 목록이다. 각 메뉴는 개별적으로 영양성분이
+이미 계산되어 있고, 지금 이 메뉴들의 칼로리를 전부 더해서 "이 끼니의 총 칼로리"를
+낼 예정이다.
+
+문제 상황: 어떤 메뉴는 이름 자체가 이미 다른 구성요소를 포함한 "완전식"일 수 있다.
+예를 들어 "장터국밥"이라는 메뉴는 국물+건더기+밥이 이미 다 포함된 하나의 요리일
+가능성이 높다. 이럴 때 같은 끼니에 "쌀밥"이 별도 메뉴로도 나와 있으면, 쌀밥을
+또 더하는 순간 밥이 두 번 계산되는 이중계산 오류가 생긴다.
+
+반대로 "장터국밥"이 실제로는 국물/건더기만 있고 밥이 안 들어있는 형태(따로국밥
+스타일)라면, 쌀밥을 같이 먹는 게 맞으므로 절대 제외하면 안 된다.
+
+메뉴 목록: {dish_list}
+
+각 메뉴명이 정확히 무엇을 뜻하는지는 확실하지 않을 수 있다. 확실하지 않으면
+제외하지 말고 그대로 둬라(과도한 제외가 더 위험하다 — 애매하면 있는 그대로 계산).
+명백하게 중복이라고 판단될 때만 제외 대상으로 표시하라.
+
+반드시 아래 JSON 형식으로만 답하라. 설명, 마크다운, 다른 텍스트는 절대 쓰지 마.
+각 제외 항목마다 "그 메뉴를 이미 포함하고 있다고 판단한 다른 메뉴"를 반드시
+`contained_in`에 명시하라 (메뉴 목록에 실제로 있는 이름 그대로). 근거가 되는
+다른 메뉴가 목록에 없으면 절대 제외하지 마라.
+{{
+  "exclude": [
+    {{"dish": "중복이라 총합에서 빼야 할 메뉴명(메뉴 목록에 있는 문자열 그대로)",
+      "contained_in": "그 메뉴를 이미 포함한다고 판단한 다른 메뉴명(반드시 메뉴 목록 안에 있는 것)",
+      "reason": "이 항목만의 판단 이유"}}
+  ]
+}}
+중복이 없다고 판단되면 exclude는 빈 배열([])로 둬라."""
 
 
 def _client(api_key: str | None = None) -> OpenAI | None:
@@ -130,6 +168,48 @@ def estimate_dish_direct(dish: str, api_key: str | None = None) -> dict | None:
     return _parse_macros_response(raw)
 
 
+def check_meal_duplicates(dish_names: list[str], api_key: str | None = None) -> dict:
+    """끼니 전체 메뉴 목록을 한 번에 검사해서 이중계산 위험이 있는 메뉴를 찾는다.
+    반환값의 "exclude"는 [{"dish":..., "contained_in":..., "reason":...}] 형태.
+    실패/키없음/메뉴 1개 이하(비교 대상 없음)면 제외 없음으로 취급."""
+    if len(dish_names) < 2:
+        return {"exclude": []}
+
+    client = _client(api_key)
+    if client is None:
+        return {"exclude": []}
+
+    try:
+        resp = client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": DUPLICATE_CHECK_PROMPT.format(dish_list=dish_names)}],
+            response_format={"type": "json_object"},
+        )
+        raw = resp.choices[0].message.content
+    except Exception as e:
+        print(f"  [GPT 중복검사 실패] {e}")
+        return {"exclude": []}
+
+    obj = _extract_json(raw)
+    if obj is None:
+        return {"exclude": []}
+
+    # 환각 방지: dish도 contained_in도 반드시 "이번에 실제로 넘긴 메뉴 목록"
+    # 안에 있어야 채택한다. 근거 메뉴(contained_in)가 목록에 없으면(예: 다른
+    # 끼니 메뉴를 착각해서 언급) 그 제외 판단 자체를 무시한다.
+    valid = []
+    for item in obj.get("exclude") or []:
+        dish = item.get("dish")
+        contained_in = item.get("contained_in")
+        if dish in dish_names and contained_in in dish_names and dish != contained_in:
+            valid.append(item)
+        else:
+            print(f"  [중복검사 무시] 근거 불충분한 판단 스킵: {item}")
+    return {"exclude": valid}
+
+
 if __name__ == "__main__":
     print(analyze_dish_structure("콩나물불고기덮밥"))
     print(estimate_dish_direct("고추참치덮밥"))
+    print(check_meal_duplicates(["장터국밥", "매콤두부조림", "쌀밥", "갈비만두찜", "부추겉절이", "포기김치"]))
+    print(check_meal_duplicates(["콩나물불고기", "감자고로케", "쌀밥", "시래기된장국", "열무김치"]))

@@ -37,6 +37,10 @@ def _meal_totals(dishes: list[str], macros: dict[str, dict]) -> dict:
     total = {"carb_g": 0, "protein_g": 0, "fat_g": 0, "kcal": 0}
     for d in dishes:
         m = macros.get(d, {})
+        if m.get("excluded_duplicate"):
+            # 예: "장터국밥"에 밥이 이미 포함돼있다고 GPT가 판단한 경우,
+            # 같이 나온 "쌀밥"을 총합에 또 더하면 이중계산이라 스킵.
+            continue
         for k in total:
             total[k] += m.get(k, 0)
     # 부동소수점 덧셈 오차(0.1+0.2=0.30000000000000004 같은) 방지 -> 소수점 첫째자리로 반올림
@@ -62,8 +66,11 @@ def _meal_rows(dishes: list[str], macros: dict[str, dict]) -> str:
         badge = RELIABILITY_BADGE.get(m.get("reliability"), "-")
         if m.get("outlier"):
             badge += " ⚠️이상치의심"
+        if m.get("excluded_duplicate"):
+            badge += " 🔁합계제외(중복)"
+        row_style = ' style="opacity:0.55"' if m.get("excluded_duplicate") else ""
         rows.append(
-            "<tr>"
+            f"<tr{row_style}>"
             f"<td>{d}</td>"
             f"<td>{m.get('serving_g', 0)}g</td>"
             f"<td>{p100['kcal']}kcal</td>"

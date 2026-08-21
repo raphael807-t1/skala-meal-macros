@@ -20,14 +20,24 @@ def _weekday_kr(date: str) -> str:
     return ["월", "화", "수", "목", "금", "토", "일"][dt.weekday()]
 
 
-def _meal_line(meal: dict) -> str:
-    return " · ".join(d["name"] for d in meal["dishes"])
+def _meal_line(meal: dict, macros: dict[str, dict]) -> str:
+    names = []
+    for d in meal["dishes"]:
+        name = d["name"]
+        if macros.get(name, {}).get("excluded_duplicate"):
+            name += "(중복제외)"
+        names.append(name)
+    return " · ".join(names)
 
 
 def _meal_totals(dishes: list[str], macros: dict[str, dict]) -> dict:
     total = {"carb_g": 0, "protein_g": 0, "fat_g": 0, "kcal": 0}
     for d in dishes:
         m = macros.get(d, {})
+        if m.get("excluded_duplicate"):
+            # 예: "장터국밥"에 밥이 이미 포함된 걸로 판단되면, 같이 나온
+            # "쌀밥"은 총합에서 제외(이중계산 방지). 메뉴 목록에는 그대로 노출.
+            continue
         for k in total:
             total[k] += m.get(k, 0)
     # 부동소수점 덧셈 오차(0.1+0.2=0.30000000000000004 같은) 방지 -> 소수점 첫째자리로 반올림
@@ -52,7 +62,7 @@ def build_message(date: str, day: dict, macros: dict[str, dict]) -> str:
         meal_totals = _meal_totals(dishes, macros)
         blocks.append(
             f"{icon} {label}\n"
-            f"{_meal_line(meal)}\n"
+            f"{_meal_line(meal, macros)}\n"
             f":fire:총 칼로리: {meal_totals['kcal']}kcal, 총 탄수: {meal_totals['carb_g']}g, "
             f"총 단백질: {meal_totals['protein_g']}g, 총 지방: {meal_totals['fat_g']}g"
         )
