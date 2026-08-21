@@ -108,8 +108,8 @@ def build_html(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: 
           <h2>{label}</h2>
           <table>
             <colgroup>
-              <col style="width:20%"><col style="width:10%"><col style="width:12%">
-              <col style="width:21%"><col style="width:9%"><col style="width:28%">
+              <col style="width:22%"><col style="width:11%"><col style="width:13%">
+              <col style="width:22%"><col style="width:10%"><col style="width:22%">
             </colgroup>
             <thead>
               <tr>
@@ -136,10 +136,10 @@ def build_html(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SKALA 오늘의 영양정보</title>
 <style>
-  body {{ font-family: -apple-system, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; color: #222; }}
+  body {{ font-family: -apple-system, sans-serif; max-width: 980px; margin: 40px auto; padding: 0 16px; color: #222; }}
   h1 {{ font-size: 1.4rem; }}
   h2 {{ font-size: 1.1rem; margin-top: 2rem; }}
-  table {{ width: 100%; min-width: 560px; table-layout: fixed; border-collapse: collapse; font-size: 0.85rem; }}
+  table {{ width: 100%; min-width: 760px; table-layout: fixed; border-collapse: collapse; font-size: 0.85rem; }}
   th, td {{ text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
   td.src {{ white-space: normal; overflow: visible; text-overflow: clip; }}
   tr.total {{ font-weight: bold; border-top: 2px solid #333; }}
