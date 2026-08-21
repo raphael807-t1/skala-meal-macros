@@ -211,8 +211,13 @@ def estimate_dishes(dishes: list[str]) -> dict[str, dict]:
     updated = False
     results = {}
     for dish in dishes:
-        if dish in cache:
-            results[dish] = cache[dish]
+        cached = cache.get(dish)
+        # "실패"(source=='실패', 예: .env를 안 불러온 채로 돌려서 DB/GPT 키가
+        # 둘 다 없었던 경우)는 캐시에 있어도 재사용하지 않고 다시 시도한다.
+        # 그렇지 않으면 한 번의 일시적 오류가 캐시에 영구히 박혀서, 나중에
+        # 키를 제대로 넣고 재실행해도 계속 실패로 나오는 문제가 있었다.
+        if cached and cached.get("source") != "실패":
+            results[dish] = cached
             continue
         macros = estimate_dish(dish)
         cache[dish] = macros
