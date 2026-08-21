@@ -42,22 +42,31 @@ def _push_page_to_github(date: str) -> None:
         print(f"[git push 실패, 계속 진행] {e}")
 
 
-def _flag_meal_duplicates(day: dict, macros: dict[str, dict]) -> None:
-    """끼니(중식/석식)별로 딱 1번씩 GPT를 불러서 이중계산 위험 메뉴를 찾고,
-    해당 메뉴에 excluded_duplicate 플래그를 붙인다 (macros를 제자리에서 수정).
-    화면/Slack에는 그대로 보여주되, 총합 계산에서만 빠지게 하기 위한 표시."""
+def _find_meal_duplicates(day: dict) -> dict[str, set[str]]:
+    """끼니(중식/석식)별로 딱 1번씩 GPT를 불러서 이중계산 위험 메뉴를 찾는다.
+    반환값: {"lunch": {"쌀밥"}, "dinner": {...}} 처럼 끼니별로 분리된 집합.
+
+    주의: 같은 메뉴명(예: "쌀밥")이 점심/저녁에 둘 다 나올 수 있는데, macros는
+    메뉴명을 키로 쓰는 딕셔너리라 점심 쌀밥과 저녁 쌀밥이 "같은 객체"를
+    공유한다. 그래서 예전엔 저녁에서만 제외 판단이 나도 macros[dish]에 직접
+    플래그를 박아버려서 점심 쌀밥까지 같이 제외되는 버그가 있었다.
+    그래서 절대 macros를 직접 수정하지 않고, 끼니별로 분리된 set을 따로
+    반환해서 generate_page.py/notify_slack.py가 "지금 보고 있는 끼니 안에서만"
+    이 메뉴가 제외 대상인지 판단하게 한다."""
+    excluded_by_meal: dict[str, set[str]] = {}
     for meal_key in ("lunch", "dinner"):
         meal = day.get(meal_key)
         if not meal:
             continue
         names = [d["name"] for d in meal["dishes"]]
         result = estimate_gpt.check_meal_duplicates(names)
+        excluded = set()
         for item in result["exclude"]:
             dish = item["dish"]
-            if dish in macros:
-                macros[dish]["excluded_duplicate"] = True
-                macros[dish]["exclude_reason"] = f"{item['contained_in']}에 포함: {item.get('reason', '')}"
-                print(f"  [중복검사] '{dish}' 총합에서 제외 (근거: {item['contained_in']}) - {item.get('reason', '')}")
+            excluded.add(dish)
+            print(f"  [중복검사:{meal_key}] '{dish}' 총합에서 제외 (근거: {item['contained_in']}) - {item.get('reason', '')}")
+        excluded_by_meal[meal_key] = excluded
+    return excluded_by_meal
 
 
 def main() -> None:
@@ -78,14 +87,14 @@ def main() -> None:
     print(f"[{day['date']}] 메뉴 {len(dishes)}개 영양정보 추정 중...")
     macros = estimate_dishes(dishes)
 
-    _flag_meal_duplicates(day, macros)
+    excluded_by_meal = _find_meal_duplicates(day)
 
-    page_path = generate(day["date"], day, macros)
+    page_path = generate(day["date"], day, macros, excluded_by_meal)
     print(f"페이지 생성 완료: {page_path}")
 
     _push_page_to_github(day["date"])
 
-    message = build_message(day["date"], day, macros)
+    message = build_message(day["date"], day, macros, excluded_by_meal)
     send_to_slack(message)
 
 

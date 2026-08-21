@@ -20,24 +20,26 @@ def _weekday_kr(date: str) -> str:
     return ["월", "화", "수", "목", "금", "토", "일"][dt.weekday()]
 
 
-def _meal_line(meal: dict, macros: dict[str, dict]) -> str:
+def _meal_line(meal: dict, excluded: set[str]) -> str:
     names = []
     for d in meal["dishes"]:
         name = d["name"]
-        if macros.get(name, {}).get("excluded_duplicate"):
+        if name in excluded:
             name += "(중복제외)"
         names.append(name)
     return " · ".join(names)
 
 
-def _meal_totals(dishes: list[str], macros: dict[str, dict]) -> dict:
+def _meal_totals(dishes: list[str], macros: dict[str, dict], excluded: set[str]) -> dict:
     total = {"carb_g": 0, "protein_g": 0, "fat_g": 0, "kcal": 0}
     for d in dishes:
-        m = macros.get(d, {})
-        if m.get("excluded_duplicate"):
-            # 예: "장터국밥"에 밥이 이미 포함된 걸로 판단되면, 같이 나온
-            # "쌀밥"은 총합에서 제외(이중계산 방지). 메뉴 목록에는 그대로 노출.
+        if d in excluded:
+            # 예: "장터국밥"에 밥이 이미 포함된 걸로 이 끼니에서 판단되면,
+            # 같이 나온 "쌀밥"은 총합에서 제외(이중계산 방지). 메뉴 목록에는
+            # 그대로 노출. excluded는 이 끼니 한정 집합이라 다른 끼니의
+            # 같은 이름 메뉴까지 같이 빠지지 않는다.
             continue
+        m = macros.get(d, {})
         for k in total:
             total[k] += m.get(k, 0)
     # 부동소수점 덧셈 오차(0.1+0.2=0.30000000000000004 같은) 방지 -> 소수점 첫째자리로 반올림
@@ -47,7 +49,8 @@ def _meal_totals(dishes: list[str], macros: dict[str, dict]) -> dict:
     return total
 
 
-def build_message(date: str, day: dict, macros: dict[str, dict]) -> str:
+def build_message(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: dict[str, set[str]] | None = None) -> str:
+    excluded_by_meal = excluded_by_meal or {}
     dt = datetime.date.fromisoformat(date)
     header = f":knife_fork_plate: 오늘의 메뉴 · {dt.strftime('%m/%d')} ({_weekday_kr(date)})"
 
@@ -57,12 +60,13 @@ def build_message(date: str, day: dict, macros: dict[str, dict]) -> str:
         if not meal:
             continue
         dishes = [d["name"] for d in meal["dishes"]]
+        excluded = excluded_by_meal.get(meal_key, set())
         icon = MEAL_ICON[meal_key]
         label = MEAL_LABEL[meal_key]
-        meal_totals = _meal_totals(dishes, macros)
+        meal_totals = _meal_totals(dishes, macros, excluded)
         blocks.append(
             f"{icon} {label}\n"
-            f"{_meal_line(meal, macros)}\n"
+            f"{_meal_line(meal, excluded)}\n"
             f":fire:총 칼로리: {meal_totals['kcal']}kcal, 총 탄수: {meal_totals['carb_g']}g, "
             f"총 단백질: {meal_totals['protein_g']}g, 총 지방: {meal_totals['fat_g']}g"
         )

@@ -33,14 +33,16 @@ def _macro_ratio(m: dict) -> str:
     return f"{round(c / total * 100)}:{round(p / total * 100)}:{round(f / total * 100)}"
 
 
-def _meal_totals(dishes: list[str], macros: dict[str, dict]) -> dict:
+def _meal_totals(dishes: list[str], macros: dict[str, dict], excluded: set[str]) -> dict:
     total = {"carb_g": 0, "protein_g": 0, "fat_g": 0, "kcal": 0}
     for d in dishes:
-        m = macros.get(d, {})
-        if m.get("excluded_duplicate"):
-            # 예: "장터국밥"에 밥이 이미 포함돼있다고 GPT가 판단한 경우,
-            # 같이 나온 "쌀밥"을 총합에 또 더하면 이중계산이라 스킵.
+        if d in excluded:
+            # 예: "장터국밥"에 밥이 이미 포함돼있다고 이 끼니에서 GPT가 판단한
+            # 경우, 같이 나온 "쌀밥"을 총합에 또 더하면 이중계산이라 스킵.
+            # excluded는 "이 끼니 한정" 집합이라, 다른 끼니의 같은 이름
+            # 메뉴(예: 점심 쌀밥)까지 같이 빠지는 일은 없다.
             continue
+        m = macros.get(d, {})
         for k in total:
             total[k] += m.get(k, 0)
     # 부동소수점 덧셈 오차(0.1+0.2=0.30000000000000004 같은) 방지 -> 소수점 첫째자리로 반올림
@@ -58,7 +60,7 @@ RELIABILITY_BADGE = {
 }
 
 
-def _meal_rows(dishes: list[str], macros: dict[str, dict]) -> str:
+def _meal_rows(dishes: list[str], macros: dict[str, dict], excluded: set[str]) -> str:
     rows = []
     for d in dishes:
         m = macros.get(d, {})
@@ -66,9 +68,10 @@ def _meal_rows(dishes: list[str], macros: dict[str, dict]) -> str:
         badge = RELIABILITY_BADGE.get(m.get("reliability"), "-")
         if m.get("outlier"):
             badge += " ⚠️이상치의심"
-        if m.get("excluded_duplicate"):
+        is_excluded = d in excluded
+        if is_excluded:
             badge += " 🔁합계제외(중복)"
-        row_style = ' style="opacity:0.55"' if m.get("excluded_duplicate") else ""
+        row_style = ' style="opacity:0.55"' if is_excluded else ""
         rows.append(
             f"<tr{row_style}>"
             f"<td>{d}</td>"
@@ -83,14 +86,16 @@ def _meal_rows(dishes: list[str], macros: dict[str, dict]) -> str:
     return "\n".join(rows)
 
 
-def build_html(date: str, day: dict, macros: dict[str, dict]) -> str:
+def build_html(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: dict[str, set[str]] | None = None) -> str:
+    excluded_by_meal = excluded_by_meal or {}
     sections = []
     for meal_key, label in MEAL_LABEL.items():
         meal = day.get(meal_key)
         if not meal:
             continue
         dishes = [d["name"] for d in meal["dishes"]]
-        totals = _meal_totals(dishes, macros)
+        excluded = excluded_by_meal.get(meal_key, set())
+        totals = _meal_totals(dishes, macros, excluded)
         sections.append(f"""
         <section>
           <h2>{label}</h2>
@@ -102,7 +107,7 @@ def build_html(date: str, day: dict, macros: dict[str, dict]) -> str:
               </tr>
             </thead>
             <tbody>
-              {_meal_rows(dishes, macros)}
+              {_meal_rows(dishes, macros, excluded)}
               <tr class="total">
                 <td colspan="4">합계</td>
                 <td>{totals['carb_g']}g / {totals['protein_g']}g / {totals['fat_g']}g</td>
@@ -144,7 +149,7 @@ def build_html(date: str, day: dict, macros: dict[str, dict]) -> str:
 </html>"""
 
 
-def generate(date: str, day: dict, macros: dict[str, dict]) -> Path:
+def generate(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: dict[str, set[str]] | None = None) -> Path:
     OUT_PATH.parent.mkdir(exist_ok=True)
-    OUT_PATH.write_text(build_html(date, day, macros), encoding="utf-8")
+    OUT_PATH.write_text(build_html(date, day, macros, excluded_by_meal), encoding="utf-8")
     return OUT_PATH
