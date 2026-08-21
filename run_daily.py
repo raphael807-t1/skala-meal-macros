@@ -1,5 +1,6 @@
-"""매일 실행되는 메인 스크립트: 메뉴 가져오기 -> 영양정보 추정 -> 페이지 생성 -> Slack 전송."""
+"""매일 실행되는 메인 스크립트: 메뉴 가져오기 -> 영양정보 추정 -> 페이지 생성 -> git push -> Slack 전송."""
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -19,6 +20,25 @@ def _load_dotenv() -> None:
             continue
         key, value = line.split("=", 1)
         os.environ.setdefault(key.strip(), value.strip())
+
+
+def _push_page_to_github(date: str) -> None:
+    """GitHub Pages(docs/)가 오늘자 상세페이지를 서빙하도록 자동 커밋+푸시.
+    실패해도(오프라인 등) 전체 파이프라인은 계속 진행 -> Slack 전송은 살아있게."""
+    repo_dir = Path(__file__).parent
+    try:
+        subprocess.run(["git", "add", "docs/index.html"], cwd=repo_dir, check=True)
+        result = subprocess.run(
+            ["git", "commit", "-m", f"메뉴 업데이트: {date}"],
+            cwd=repo_dir, capture_output=True, text=True,
+        )
+        if result.returncode != 0 and "nothing to commit" not in result.stdout:
+            print(f"[git commit 경고] {result.stdout}{result.stderr}")
+            return
+        subprocess.run(["git", "push"], cwd=repo_dir, check=True)
+        print("GitHub Pages 업데이트(push) 완료.")
+    except subprocess.CalledProcessError as e:
+        print(f"[git push 실패, 계속 진행] {e}")
 
 
 def main() -> None:
@@ -41,6 +61,8 @@ def main() -> None:
 
     page_path = generate(day["date"], day, macros)
     print(f"페이지 생성 완료: {page_path}")
+
+    _push_page_to_github(day["date"])
 
     message = build_message(day["date"], day, macros)
     send_to_slack(message)

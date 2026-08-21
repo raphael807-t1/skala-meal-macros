@@ -1,39 +1,66 @@
-"""Slack 채널로 오늘의 메뉴+영양정보 전송 (Incoming Webhook 사용)."""
+"""Slack 채널로 오늘의 메뉴 요약 전송 (Incoming Webhook 사용).
+
+메시지는 일부러 짧게: 메뉴 나열 + 탄단지 총합만.
+요리별 상세(1회 제공량/100g당 칼로리/탄단지 비율)는 generate_page.py가 만드는
+웹페이지로 넘기고, 여기선 그 링크만 붙인다.
+"""
+import datetime
 import os
 
 import requests
 
+MEAL_ICON = {"lunch": ":green_salad:", "dinner": ":stew:"}
 MEAL_LABEL = {"lunch": "중식", "dinner": "석식"}
 
+PAGE_URL = "https://raphael807-t1.github.io/skala-meal-macros/"
 
-def _meal_block(meal_key: str, meal: dict, macros: dict[str, dict]) -> str:
-    label = MEAL_LABEL[meal_key]
-    lines = [f"*{label}*"]
+
+def _weekday_kr(date: str) -> str:
+    dt = datetime.date.fromisoformat(date)
+    return ["월", "화", "수", "목", "금", "토", "일"][dt.weekday()]
+
+
+def _meal_line(meal: dict) -> str:
+    return " · ".join(d["name"] for d in meal["dishes"])
+
+
+def _meal_totals(dishes: list[str], macros: dict[str, dict]) -> dict:
     total = {"carb_g": 0, "protein_g": 0, "fat_g": 0, "kcal": 0}
-    for dish in meal["dishes"]:
-        name = dish["name"]
-        m = macros.get(name, {})
-        lines.append(
-            f"  - {name}: 탄 {m.get('carb_g', 0)}g / 단 {m.get('protein_g', 0)}g "
-            f"/ 지 {m.get('fat_g', 0)}g / {m.get('kcal', 0)}kcal"
-        )
+    for d in dishes:
+        m = macros.get(d, {})
         for k in total:
             total[k] += m.get(k, 0)
-    lines.append(
-        f"  *합계: 탄 {total['carb_g']}g / 단 {total['protein_g']}g "
-        f"/ 지 {total['fat_g']}g / {total['kcal']}kcal*"
-    )
-    return "\n".join(lines)
+    # 부동소수점 덧셈 오차(0.1+0.2=0.30000000000000004 같은) 방지 -> 소수점 첫째자리로 반올림
+    for k in ("carb_g", "protein_g", "fat_g"):
+        total[k] = round(total[k], 1)
+    total["kcal"] = round(total["kcal"])
+    return total
 
 
 def build_message(date: str, day: dict, macros: dict[str, dict]) -> str:
-    parts = [f":rice: *SKALA 오늘의 메뉴 & 영양정보 ({date})*"]
+    dt = datetime.date.fromisoformat(date)
+    header = f":knife_fork_plate: 오늘의 메뉴 · {dt.strftime('%m/%d')} ({_weekday_kr(date)})"
+
+    blocks = [header]
     for meal_key in ("lunch", "dinner"):
         meal = day.get(meal_key)
-        if meal:
-            parts.append(_meal_block(meal_key, meal, macros))
-    parts.append("_영양정보는 로컬 sLLM 추정치입니다._")
-    return "\n\n".join(parts)
+        if not meal:
+            continue
+        dishes = [d["name"] for d in meal["dishes"]]
+        icon = MEAL_ICON[meal_key]
+        label = MEAL_LABEL[meal_key]
+        meal_totals = _meal_totals(dishes, macros)
+        blocks.append(
+            f"{icon} {label}\n"
+            f"{_meal_line(meal)}\n"
+            f":fire:총 칼로리: {meal_totals['kcal']}kcal, 총 탄수: {meal_totals['carb_g']}g, "
+            f"총 단백질: {meal_totals['protein_g']}g, 총 지방: {meal_totals['fat_g']}g"
+        )
+
+    blocks.append(f"<{PAGE_URL}|자세히보기>")
+
+    # 각 블록 사이 빈 줄 하나씩 (요청하신 예시처럼 끼니 단락 사이를 띄움)
+    return "\n\n".join(blocks)
 
 
 def send_to_slack(text: str, webhook_url: str | None = None) -> None:
