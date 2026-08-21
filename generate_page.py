@@ -24,15 +24,6 @@ def _per_100g(m: dict) -> dict:
     }
 
 
-def _macro_ratio(m: dict) -> str:
-    """탄:단:지 무게(g) 비율을 정수 비율 문자열로."""
-    c, p, f = m.get("carb_g", 0), m.get("protein_g", 0), m.get("fat_g", 0)
-    total = c + p + f
-    if total <= 0:
-        return "-"
-    return f"{round(c / total * 100)}:{round(p / total * 100)}:{round(f / total * 100)}"
-
-
 def _meal_totals(dishes: list[str], macros: dict[str, dict], excluded: set[str]) -> dict:
     total = {"carb_g": 0, "protein_g": 0, "fat_g": 0, "kcal": 0}
     for d in dishes:
@@ -53,11 +44,18 @@ def _meal_totals(dishes: list[str], macros: dict[str, dict], excluded: set[str])
 
 
 RELIABILITY_BADGE = {
-    "high": "🟢 DB 정확매칭",
-    "medium": "🟡 DB 유사/구성요소",
-    "low": "🟠 GPT추정",
-    "none": "🔴 실패",
+    "high": "DB",
+    "medium": "DB유사",
+    "low": "GPT추정",
+    "none": "실패",
 }
+
+
+def _source_badge(m: dict) -> str:
+    # 이상치 의심이면 그게 제일 중요한 정보라 출처 대신 그것부터 보여준다.
+    if m.get("outlier"):
+        return "이상치의심"
+    return RELIABILITY_BADGE.get(m.get("reliability"), "-")
 
 
 def _meal_rows(dishes: list[str], macros: dict[str, dict], excluded: set[str]) -> str:
@@ -65,19 +63,16 @@ def _meal_rows(dishes: list[str], macros: dict[str, dict], excluded: set[str]) -
     for d in dishes:
         m = macros.get(d, {})
         p100 = _per_100g(m)
-        badge = RELIABILITY_BADGE.get(m.get("reliability"), "-")
-        if m.get("outlier"):
-            badge += " ⚠️이상치의심"
+        badge = _source_badge(m)
         is_excluded = d in excluded
         if is_excluded:
-            badge += " 🔁합계제외(중복)"
+            badge += " (중복제외)"
         row_style = ' style="opacity:0.55"' if is_excluded else ""
         rows.append(
             f"<tr{row_style}>"
             f"<td>{d}</td>"
             f"<td>{m.get('serving_g', 0)}g</td>"
             f"<td>{p100['kcal']}kcal</td>"
-            f"<td>{_macro_ratio(m)}</td>"
             f"<td>{m.get('carb_g', 0)}g / {m.get('protein_g', 0)}g / {m.get('fat_g', 0)}g</td>"
             f"<td>{m.get('kcal', 0)}kcal</td>"
             f"<td>{badge}</td>"
@@ -100,16 +95,20 @@ def build_html(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: 
         <section>
           <h2>{label}</h2>
           <table>
+            <colgroup>
+              <col style="width:26%"><col style="width:12%"><col style="width:14%">
+              <col style="width:26%"><col style="width:12%"><col style="width:10%">
+            </colgroup>
             <thead>
               <tr>
                 <th>메뉴</th><th>1회 제공량</th><th>100g당 칼로리</th>
-                <th>탄:단:지 비율</th><th>탄/단/지</th><th>칼로리</th><th>출처</th>
+                <th>탄/단/지</th><th>칼로리</th><th>출처</th>
               </tr>
             </thead>
             <tbody>
               {_meal_rows(dishes, macros, excluded)}
               <tr class="total">
-                <td colspan="4">합계</td>
+                <td colspan="3">합계</td>
                 <td>{totals['carb_g']}g / {totals['protein_g']}g / {totals['fat_g']}g</td>
                 <td>{totals['kcal']}kcal</td>
                 <td></td>
@@ -128,8 +127,8 @@ def build_html(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: 
   body {{ font-family: -apple-system, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; color: #222; }}
   h1 {{ font-size: 1.4rem; }}
   h2 {{ font-size: 1.1rem; margin-top: 2rem; }}
-  table {{ width: 100%; border-collapse: collapse; font-size: 0.85rem; }}
-  th, td {{ text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; white-space: nowrap; }}
+  table {{ width: 100%; min-width: 560px; table-layout: fixed; border-collapse: collapse; font-size: 0.85rem; }}
+  th, td {{ text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
   tr.total {{ font-weight: bold; border-top: 2px solid #333; }}
   .note {{ color: #888; font-size: 0.8rem; margin-top: 2rem; }}
   .scroll {{ overflow-x: auto; }}
@@ -140,11 +139,7 @@ def build_html(date: str, day: dict, macros: dict[str, dict], excluded_by_meal: 
   <div class="scroll">
   {"".join(sections) if sections else "<p>오늘은 메뉴 정보가 없습니다.</p>"}
   </div>
-  <p class="note">
-    출처: 🟢 DB 정확매칭(검색어와 이름이 매우 비슷) · 🟡 DB 유사매칭/구성요소 추정 · 🟠 GPT 추정(DB에 없는 메뉴) —
-    100g당 DB 실측치를 메뉴 종류별 예상 제공량으로 환산한 값이며, 실제와 다를 수 있습니다.
-    ⚠️이상치의심은 같은 종류 음식 대비 칼로리가 비정상적으로 높게 나온 DB 원본값입니다(값은 수정하지 않고 표시만 함).
-  </p>
+  <p class="note">출처: 식품의약품안전처 식품영양성분DB API (data.go.kr)</p>
 </body>
 </html>"""
 
