@@ -25,7 +25,13 @@ def _load_dotenv() -> None:
 
 def _push_page_to_github(date: str) -> None:
     """GitHub Pages(docs/)가 오늘자 상세페이지를 서빙하도록 자동 커밋+푸시.
-    실패해도(오프라인 등) 전체 파이프라인은 계속 진행 -> Slack 전송은 살아있게."""
+    실패해도(오프라인 등) 전체 파이프라인은 계속 진행 -> Slack 전송은 살아있게.
+
+    cron이 pmset 웨이크 직후(8:55 기상 -> 9:00 실행)에 도는데, 그 사이 Wi-Fi가
+    아직 완전히 재연결 안 된 상태에서 push가 실패한 적이 있어서(2026-08-24),
+    바로 포기하지 않고 몇 초 간격으로 재시도한다."""
+    import time
+
     repo_dir = Path(__file__).parent
     try:
         subprocess.run(["git", "add", "docs/index.html"], cwd=repo_dir, check=True)
@@ -36,10 +42,20 @@ def _push_page_to_github(date: str) -> None:
         if result.returncode != 0 and "nothing to commit" not in result.stdout:
             print(f"[git commit 경고] {result.stdout}{result.stderr}")
             return
-        subprocess.run(["git", "push"], cwd=repo_dir, check=True)
-        print("GitHub Pages 업데이트(push) 완료.")
     except subprocess.CalledProcessError as e:
-        print(f"[git push 실패, 계속 진행] {e}")
+        print(f"[git add/commit 실패, 계속 진행] {e}")
+        return
+
+    max_attempts = 4
+    for attempt in range(1, max_attempts + 1):
+        result = subprocess.run(["git", "push"], cwd=repo_dir, capture_output=True, text=True)
+        if result.returncode == 0:
+            print("GitHub Pages 업데이트(push) 완료." + (f" ({attempt}번째 시도)" if attempt > 1 else ""))
+            return
+        print(f"[git push 실패 {attempt}/{max_attempts}] {result.stderr.strip()}")
+        if attempt < max_attempts:
+            time.sleep(15)
+    print("[git push 최종 실패, 다음 실행 때 재시도됨]")
 
 
 def _find_meal_duplicates(day: dict) -> dict[str, dict[str, str]]:
