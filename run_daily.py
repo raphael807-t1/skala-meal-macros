@@ -1,12 +1,14 @@
 """매일 실행되는 메인 스크립트: 메뉴 가져오기 -> 영양정보 추정 -> 페이지 생성 -> git push -> Slack 전송."""
 import os
+import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import estimate_gpt
 from estimate_macros import estimate_dishes
-from fetch_menu import dish_names, fetch_today_menu
+from fetch_menu import dish_names, fetch_today_menu, MENU_API
 from generate_page import generate
 from notify_slack import build_message, send_to_slack
 
@@ -58,6 +60,29 @@ def _push_page_to_github(date: str) -> None:
     print("[git push 최종 실패, 다음 실행 때 재시도됨]")
 
 
+def _wait_for_network(max_wait_seconds: int = 180, interval_seconds: int = 10) -> None:
+    """pmset이 맥을 깨운 직후(8:55 기상 -> 9:00 cron) Wi-Fi/DNS가 아직 안 붙어있는
+    경우가 있다(2026-08-25에 NameResolutionError로 스크립트 전체가 죽은 적 있음,
+    재시도 로직이 하나도 없어서 아예 실행이 안 됐었음). 그래서 첫 네트워크 호출
+    전에 DNS가 풀리는지 먼저 확인하고, 안 풀리면 몇 초 간격으로 재시도한다."""
+    from urllib.parse import urlparse
+
+    host = urlparse(MENU_API).hostname
+    deadline = time.time() + max_wait_seconds
+    attempt = 0
+    while time.time() < deadline:
+        attempt += 1
+        try:
+            socket.gethostbyname(host)
+            if attempt > 1:
+                print(f"네트워크 연결 확인됨 ({attempt}번째 시도)")
+            return
+        except socket.gaierror:
+            print(f"[네트워크 대기 {attempt}] '{host}' DNS 해석 실패, {interval_seconds}초 후 재시도")
+            time.sleep(interval_seconds)
+    print("[네트워크 대기 시간 초과, 그래도 계속 진행 -> 이후 단계에서 실패할 수 있음]")
+
+
 def _find_meal_duplicates(day: dict) -> dict[str, dict[str, str]]:
     """끼니(중식/석식)별로 딱 1번씩 GPT를 불러서 이중계산 위험 메뉴를 찾는다.
     반환값: {"lunch": {}, "dinner": {"쌀밥": "장터국밥"}} 형태 -- 제외된 메뉴명 ->
@@ -89,6 +114,7 @@ def _find_meal_duplicates(day: dict) -> dict[str, dict[str, str]]:
 
 def main() -> None:
     _load_dotenv()
+    _wait_for_network()
     day = fetch_today_menu()
     if day is None:
         print("오늘은 메뉴 정보가 없습니다 (주말/공휴일/미등록).")
