@@ -31,7 +31,18 @@ def _push_page_to_github(date: str) -> None:
 
     cron이 pmset 웨이크 직후(8:55 기상 -> 9:00 실행)에 도는데, 그 사이 Wi-Fi가
     아직 완전히 재연결 안 된 상태에서 push가 실패한 적이 있어서(2026-08-24),
-    바로 포기하지 않고 몇 초 간격으로 재시도한다."""
+    바로 포기하지 않고 몇 초 간격으로 재시도한다.
+
+    2026-08-27에 발견한 진짜 원인: cron은 GUI 로그인 세션이 아니라서 macOS
+    키체인(git의 osxkeychain credential helper가 쓰는)에 접근을 못 한다.
+    그래서 매번 "could not read Username for 'https://github.com': Device
+    not configured"로 push가 조용히 실패하고 있었음 -> 로컬 commit은 매일
+    쌓이는데 실제 push는 사용자가 나중에 수동으로 뭔가 할 때(키체인이 열려
+    있는 타이밍)까지 안 돼서, 사이트가 "항상 하루 늦게" 보이는 현상으로
+    나타났다. 재시도 횟수를 늘리는 걸로는 못 고치는 문제였음(인증 자체가
+    안 되니 몇 번을 재시도해도 동일하게 실패).
+    고침: keychain 대신 .env의 GITHUB_TOKEN(fine-grained PAT)을 push URL에
+    직접 실어서 인증 -> GUI 세션 여부와 무관하게 항상 동작."""
     import time
 
     repo_dir = Path(__file__).parent
@@ -48,9 +59,18 @@ def _push_page_to_github(date: str) -> None:
         print(f"[git add/commit 실패, 계속 진행] {e}")
         return
 
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        # 토큰을 원격 URL에 직접 실어서 push -> 이 명령의 인자로만 쓰이고
+        # .git/config에는 남지 않으므로, 저장소 파일을 봐도 토큰이 노출 안 됨.
+        push_target = [f"https://{token}@github.com/raphael807-t1/skala-meal-macros.git", "HEAD:main"]
+    else:
+        print("[경고] GITHUB_TOKEN이 .env에 없음 -> keychain 방식으로 push 시도(GUI 세션 아니면 실패함)")
+        push_target = []
+
     max_attempts = 4
     for attempt in range(1, max_attempts + 1):
-        result = subprocess.run(["git", "push"], cwd=repo_dir, capture_output=True, text=True)
+        result = subprocess.run(["git", "push", *push_target], cwd=repo_dir, capture_output=True, text=True)
         if result.returncode == 0:
             print("GitHub Pages 업데이트(push) 완료." + (f" ({attempt}번째 시도)" if attempt > 1 else ""))
             return
