@@ -2,3 +2,4 @@
 __pycache__/
 data/macro_cache.json
 cron.log
+launchd.log

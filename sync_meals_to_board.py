@@ -19,19 +19,33 @@ DB 구조 (끼니 단위로 좋아요/댓글):
   pip install -r requirements.txt   (psycopg2-binary 포함)
   python3 sync_meals_to_board.py
 """
+import os
+from pathlib import Path
+
 import psycopg2
+from dotenv import load_dotenv
 
 import estimate_macros
 import fetch_menu
 from run_daily import _load_dotenv
 
-# 게시판 docker-compose.yml에서 정한 값과 동일해야 함 (backend의 application.properties와 짝)
+# 게시판(6주차_클라우드/day2/homework_revised) 쪽 .env를 그대로 읽어옴 —
+# 비밀번호를 이 파일에 다시 하드코딩하지 않고, "진짜 값을 갖고 있는 곳" 하나만 두기 위함.
+# 이 파일 기준 상대경로(parent.parent.parent)로 계산하던 걸 2026-09-07에
+# 절대경로로 바꿈 — skala-meal-macros가 ~/Downloads/Raphael_work/ 밑에 있을 때는
+# 상대경로가 맞았는데, macOS가 ~/Downloads를 백그라운드 프로세스에 특별 보호하는
+# 문제 때문에 이 프로젝트를 ~/skala-meal-macros로 옮기면서 계층 구조가 깨졌음.
+BOARD_ENV_PATH = (
+    Path.home() / "Downloads" / "6주차_클라우드" / "day2" / "homework_revised" / ".env"
+)
+load_dotenv(BOARD_ENV_PATH)
+
 DB_CONFIG = dict(
     host="localhost",
-    port=5433,
-    dbname="board",
-    user="board_user",
-    password="board_pw",
+    port=5433,   # docker-compose.yml에서 호스트로 열어둔 포트 (컨테이너 안 5432와 매핑)
+    dbname=os.environ["DB_NAME"],
+    user=os.environ["DB_USER"],
+    password=os.environ["DB_PASSWORD"],
 )
 
 
